@@ -1,19 +1,21 @@
 from neo4j import GraphDatabase as gd
+import neo4j.exceptions
 
+# Initialize Database Connection.
 print('Initializing connection to Neo4j database...')
 driver = gd.driver("neo4j://localhost:7687", auth=("neo4j", "hello"))
-driver.verify_connectivity()
+try:
+    driver.verify_connectivity()
+except neo4j.exceptions.ServiceUnavailable:
+    print('Connection to Neo4j database failed. Please try again.')
+    exit()
 print('Connection to Neo4j database established.')
 print('Initializing session...')
 
-with driver.session(database='neo4j') as sesh:
+# Enter session for making some queries!
+with driver.session() as sesh:
     print('Hello! Welcome to the Movie Recommendation System.')
-    '''
-    Step 1. Ask the user for their id X (value between 1-600).
-    Search for the user node with id = X. If there is a name property, display: “Welcome,
-    <username>!”. If there is no name property, ask the user for their name and add it to the
-    database.
-    '''
+
     # User ID input validation.
     user_id = input("Please enter your user id (1-600): ")
     while not user_id.isdigit():
@@ -22,14 +24,19 @@ with driver.session(database='neo4j') as sesh:
     while (int(user_id) < 1 or int(user_id) > 600):
         print("Invalid user id. Please try again.")
         user_id = input("Please enter your user id (1-600): ")
+    user_id = (int)(user_id)
 
     # Check if username exists under userId in database. If not, add it.
-    if sesh.run("MATCH (u:User {userId: $input_user}) RETURN u.name;", input_user=user_id) is None:
-        user_name = input("No name was found for that ID. Please enter your name: ")
-        sesh.run("MATCH (u:User {userId: $input_user}) SET u.name = $user_name;", input_user=user_id, user_name=user_name)
-        print("Username added to database under ID: " + user_id + ". Welcome, " + user_name + "!")
+    username_query = sesh.run("MATCH (u:User) WHERE u.userId = $input_user RETURN u.name AS name;", input_user=user_id)
+    username_record = username_query.single()
+
+    # If username exists for ID, awesome. If not, add it.
+    if username_record['name'] is None:
+        username_input = input("No name was found for that ID. Please enter your name: ")
+        sesh.run("MATCH (u:User {userId: $input_user}) SET u.name = $user_name;", input_user=user_id, user_name=username_input)
+        print("Username added to database under ID: " + (str)(user_id) + ". Welcome, " + username_input + "!")
     else:
-        print("Welcome, " + sesh.run("MATCH (u:User {userId: $input_user}) RETURN u.name;", input_user=user_id).data()[0] + ".")
+        print("Welcome, " + (str)(username_record['name']) + ".")
 
     # Initialize functions for switch statement below.
     '''
@@ -100,5 +107,6 @@ with driver.session(database='neo4j') as sesh:
             case _:
                 print("Invalid input. Please try again.")
 
+sesh.close()
 driver.close()
 print('Connection to Neo4j database closed. Goodbye!')
