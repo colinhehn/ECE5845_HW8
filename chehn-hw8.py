@@ -67,15 +67,21 @@ with driver.session() as sesh:
     '''
     def recommendations():
         query = ("WITH $input_user AS X "
-                 "MATCH (u:User {userId: X})-[gp:genre_pref]->(g:Genre)"
+                 "MATCH (u:User {userId: X})-[gp:genre_pref]->(g:Genre) "
                  "WITH u, g, gp.preference AS pref ORDER BY pref DESC LIMIT 1 "
                  "MATCH (u)-[:RATED]->(m:Movie)-[:IN_GENRE]->(g) "
                  "WHERE NOT EXISTS((u)-[:RATED]->(m)) "
-                 "RETURN m.title AS recommendedMovies ORDER BY m.rating DESC LIMIT 5;")
+                 "WITH m, AVG(rating) AS avgRating, COUNT(rating) AS numRatings "
+                 "RETURN m.movieId AS movieId, m.title AS recommendedMovies, avgRating AS averageUserRating, numRatings AS numberOfRatings "
+                 "ORDER BY avgRating DESC, numRatings DESC "
+                 "LIMIT 5;")
                 
         result = sesh.run(query, input_user=user_id)
         print('Listing top 5 recommendations...')
-        print(result.data())
+        recommendations = result.data()
+        for i in range(len(recommendations)):
+            print((str)(i+1) + ". " + recommendations[i]['recommendedMovies'])
+
         return
 
     '''
