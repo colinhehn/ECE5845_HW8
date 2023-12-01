@@ -46,58 +46,58 @@ with driver.session() as sesh:
     '''
     def keyword():
         keyword = input("Please enter a keyword (or a few, separated by spaces): ")
-        query = (
-        "MATCH (user:User {userId: $input_user})-[:RATED]->(ratedMovie:Movie)-[:IN_GENRE]->(genre:Genre), "
-        "(movie:Movie)-[:IN_GENRE]->(genre)"
-        "WHERE ANY(keyword IN $keywordsList WHERE toLower(movie.title) CONTAINS toLower(keyword))"
-        "WITH movie, genre, AVG(ratedMovie.rating) AS avgRating, COUNT(ratedMovie) AS ratedCount"
-        "RETURN movie.title AS title, genre.name AS genre, avgRating AS averageRating, "
-        "CASE WHEN ratedCount > 0 THEN true ELSE false END AS userRated,"
-        "COLLECT(ratedMovie.rating) AS userRatings")
+        query = ("MATCH (u:User)-[r:RATED]->(m:Movie)-[:IN_GENRE]->(g:Genre) "
+                 "WHERE ALL (keyword IN $keywordsList WHERE m.title CONTAINS keyword) "
+                 "WITH m, g, AVG(r.rating) AS avgRating, CASE WHEN EXISTS((u:User {userID: $input_user})-[:RATED]->(m)) THEN true ELSE false END AS seenMovie, r.rating AS userRating "
+                 "RETURN m.title AS movieTitle, g.name AS genre, avgRating AS averageRating, seenMovie AS seenMovie, userRating AS userRating;"
+                )
 
-        result = sesh.run(query, input_user=user_id, keywordsList=keyword.split())
+        result = sesh.run(query, input_user=user_id, keywordsList=keyword.split()).data()
         print('Listing movie titles containing keyword(s): ' + keyword + '.')
-        print(result.data())
+        for i in range(len(result)):
+            print((str)(i+1) + ". " + result[i]['movieTitle'] + " (" + result[i]['genre'] + ", avg rating: " + (str)(result[i]['averageRating']) + ", seen: " + (str)(result[i]['seenMovie']) + ", your rating: " + (str)(result[i]['userRating']) + ")")
         return
 
-    '''
-    Provide the user with their top 5 recommendations.
-    Execute query Q5.3 from Homework 7. Display the list of recommendations including movie id,
-    title, average user rating (from all users), and number of ratings (from all users).
-    '''
     def recommendations():
-        query = ("WITH $input_user AS X "
-                 "MATCH (u:User {userId: X})-[gp:genre_pref]->(g:Genre) "
-                 "WITH u, g, gp.preference AS pref ORDER BY pref DESC LIMIT 1 "
-                 "MATCH (u)-[:RATED]->(m:Movie)-[:IN_GENRE]->(g) "
+        query = ("MATCH (u:User {userId: $input_user})-[gp:genre_pref]->(g:Genre) "
+                 "WITH u, g, gp.preference AS pref "
+                 "ORDER BY pref DESC "
+                 "LIMIT 1 "
+                 "MATCH (m:Movie)-[:IN_GENRE]->(g) "
                  "WHERE NOT EXISTS((u)-[:RATED]->(m)) "
-                 "WITH m, AVG(rating) AS avgRating, COUNT(rating) AS numRatings "
-                 "RETURN m.movieId AS movieId, m.title AS recommendedMovies, avgRating AS averageUserRating, numRatings AS numberOfRatings "
-                 "ORDER BY avgRating DESC, numRatings DESC "
-                 "LIMIT 5;")
-                
+                 "RETURN m.title AS recommendedMovies, m.movieId AS movieId, m.rating AS averageUserRating, m.numRatings AS numberOfRatings "
+                 "ORDER BY m.rating DESC "
+                 "LIMIT 5;"
+                )
         result = sesh.run(query, input_user=user_id)
         print('Listing top 5 recommendations...')
         recommendations = result.data()
+        print(recommendations)
         for i in range(len(recommendations)):
-            print((str)(i+1) + ". " + recommendations[i]['recommendedMovies'])
-
+            print((str)(i+1) + ". " + recommendations[i]['recommendedMovies'] + " (id: " + (str)(recommendations[i]['movieId']) + ")")
         return
 
-    '''
-    Allow the user to provide a rating for any of the previous recommendations (by
-    providing the movie id and the rating). Your program should add the RATED relationship
-    between the movie and the user to the database.
-    '''
     def rating():
+        # User input.
         movie_id = input("Please enter a movie id: ")
         rating = input("Please enter a rating: ")
-        sesh.run("MATCH (u:User {userId: $user_id}), (m:Movie {id: $movie_id}) CREATE (u)-[:RATED {rating: $rating}]->(m);", user_id=user_id, movie_id=movie_id, rating=rating)
+        if not rating.isdigit():
+            print("Invalid rating. Please try again.")
+            return
+        rating = (int)(rating)
+        if rating > 10 or rating < 0:
+            print("Invalid rating. Please try again.")
+            return
+        
+        # Add rating to database.
+        sesh.run("MATCH (u:User {userId: $user_id}), (m:Movie {movieId: $movie_id}) CREATE (u)-[:RATED {rating: $rating}]->(m);", user_id=user_id, movie_id=movie_id, rating=rating)
         print("Rating added to database.")
         return
     
     # Infinite loop for user input. Use switch to delegate to appropriate functionality.
     while True:
+        print()
+        print("What would you like to do?")
         print("1. Search for a movie title.")
         print("2. Provide a rating for a movie.")
         print("3. Get recommendations.")
@@ -106,6 +106,7 @@ with driver.session() as sesh:
         while not user_input.isdigit():
             print("Invalid input. Please try again.")
             user_input = input("Please enter a number: ")
+        print()
 
         match user_input:
             case "1":
