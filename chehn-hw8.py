@@ -39,11 +39,6 @@ with driver.session() as sesh:
         print("Welcome, " + (str)(username_record['name']) + ".")
 
     # Initialize functions for switch statement below.
-    '''
-    Allow the user to search for a movie title (search for titles that contain the keyword(s)
-    entered by the user). List the movie title, genre, average rating, and a flag whether the user has
-    already seen it (rated it) and their rating for all matching movies.
-    '''
     def keyword():
         keyword = input("Please enter a keyword (or a few, separated by spaces): ")
         query = ("MATCH (u:User)-[r:RATED]->(m:Movie)-[:IN_GENRE]->(g:Genre) "
@@ -72,7 +67,6 @@ with driver.session() as sesh:
         result = sesh.run(query, input_user=user_id)
         print('Listing top 5 recommendations...')
         recommendations = result.data()
-        print(recommendations)
         for i in range(len(recommendations)):
             print((str)(i+1) + ". " + recommendations[i]['recommendedMovies'] + " (id: " + (str)(recommendations[i]['movieId']) + ")")
         return
@@ -81,10 +75,7 @@ with driver.session() as sesh:
         # User input.
         movie_id = input("Please enter a movie id: ")
         rating = input("Please enter a rating: ")
-        if not rating.isdigit():
-            print("Invalid rating. Please try again.")
-            return
-        rating = (int)(rating)
+        rating = (float)(rating)
         if rating > 10 or rating < 0:
             print("Invalid rating. Please try again.")
             return
